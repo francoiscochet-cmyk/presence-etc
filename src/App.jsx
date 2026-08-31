@@ -2,10 +2,11 @@
 // APPLICATION DE POINTAGE QUOTIDIEN — ÉQUIPE COMMERCIALE
 // -----------------------------------------------------------------------------
 // Application React en un seul fichier, pensée pour être remplie en 2 ou 3
-// clics par les managers. Pas de backend : l'état vit dans React (useState)
-// et est sauvegardé dans le localStorage du navigateur à chaque changement,
-// afin que les noms des managers, la composition des équipes et le pointage
-// restent d'une visite à l'autre sur le même appareil.
+// clics par les managers. Les données (managers, équipe, pointage) sont
+// stockées dans Firebase Realtime Database (voir src/firebase.js) : chaque
+// modification est immédiatement visible par tous les managers qui ont la
+// page ouverte, sur n'importe quel appareil — pas de backend à héberger,
+// pas de compte à créer pour les managers.
 //
 // Parcours principal :
 //   Écran 1 (Accueil)     -> le manager clique sur sa carte
@@ -42,6 +43,8 @@ import {
   Plus,
   RotateCcw,
 } from 'lucide-react';
+import { onValue, ref, set } from 'firebase/database';
+import { db, CHEMIN_DONNEES } from './firebase.js';
 
 // -----------------------------------------------------------------------------
 // 1. CONFIGURATION DES STATUTS DE PRÉSENCE
@@ -177,37 +180,6 @@ const PALETTE_COULEURS = [
 ];
 
 // -----------------------------------------------------------------------------
-// 2 bis. PERSISTANCE (localStorage)
-// -----------------------------------------------------------------------------
-// Pas de backend : on sauvegarde l'état complet (managers, équipe, pointage)
-// dans le localStorage du navigateur, pour qu'il survive à un rechargement
-// de la page ou à la fermeture de l'onglet, sur le même appareil.
-// Le suffixe de version change quand la structure des données de démo change
-// (ex. passage aux vraies équipes, retrait du champ secteur) : ça évite qu'une
-// ancienne sauvegarde locale (avec les anciens noms d'exemple) ne masque les
-// nouvelles données par défaut.
-const CLE_STOCKAGE = 'pointage-commercial-etat-v2';
-
-function chargerEtat() {
-  try {
-    const brut = window.localStorage.getItem(CLE_STOCKAGE);
-    return brut ? JSON.parse(brut) : null;
-  } catch {
-    // localStorage indisponible (navigation privée, quota...) : on repart des données de démo.
-    return null;
-  }
-}
-function sauvegarderEtat(etat) {
-  try {
-    window.localStorage.setItem(CLE_STOCKAGE, JSON.stringify(etat));
-  } catch {
-    // Sauvegarde impossible : l'application continue de fonctionner en mémoire uniquement.
-  }
-}
-// Lu une seule fois, au chargement du module (donc au chargement de la page).
-const ETAT_SAUVEGARDE = typeof window !== 'undefined' ? chargerEtat() : null;
-
-// -----------------------------------------------------------------------------
 // 3. DONNÉES DE DÉMONSTRATION
 // -----------------------------------------------------------------------------
 const MANAGERS_INITIAUX = [
@@ -267,6 +239,18 @@ function construireDonneesDemo() {
     donnees[jour] = parCommercial;
   });
   return donnees;
+}
+
+// État partagé complet de démo (managers, équipe, pointage, compteurs) :
+// utilisé pour amorcer la base la toute première fois, et pour réinitialiser.
+function etatDemo() {
+  return {
+    managers: MANAGERS_INITIAUX,
+    commerciaux: COMMERCIAUX_INITIAUX,
+    pointage: construireDonneesDemo(),
+    prochainId: COMMERCIAUX_INITIAUX.length + 1,
+    prochainManagerId: MANAGERS_INITIAUX.length + 1,
+  };
 }
 
 // -----------------------------------------------------------------------------
@@ -813,8 +797,8 @@ function EcranEquipe({ managerId, equipe, onAjouter, onRetirer, onReinitialiser 
 
       <div className="mt-8 border-t border-slate-200 pt-5 text-center">
         <p className="text-xs text-slate-400">
-          Les noms des managers et des commerciaux, ainsi que le pointage, sont mémorisés
-          automatiquement sur cet appareil.
+          Les noms des managers et des commerciaux, ainsi que le pointage, sont partagés en
+          direct avec toutes les personnes qui ouvrent ce lien.
         </p>
         <button
           type="button"
@@ -822,7 +806,7 @@ function EcranEquipe({ managerId, equipe, onAjouter, onRetirer, onReinitialiser 
           className="mt-2 inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-slate-400 hover:bg-slate-100 hover:text-slate-600"
         >
           <RotateCcw className="h-3.5 w-3.5" />
-          Réinitialiser avec les données de démonstration
+          Réinitialiser (pour tout le monde) avec les données de démonstration
         </button>
       </div>
     </div>
@@ -1007,22 +991,40 @@ export default function App() {
   // Onglet actif dans l'espace manager
   const [onglet, setOnglet] = useState('jour');
 
-  // Managers : modifiables (renommer / ajouter / supprimer) depuis l'écran d'accueil.
-  // Repartent de la sauvegarde locale si elle existe, sinon des données de démo.
-  const [managers, setManagers] = useState(ETAT_SAUVEGARDE?.managers ?? MANAGERS_INITIAUX);
-  // Compteur pour générer des identifiants uniques aux nouveaux managers
-  const [prochainManagerId, setProchainManagerId] = useState(
-    ETAT_SAUVEGARDE?.prochainManagerId ?? MANAGERS_INITIAUX.length + 1
-  );
+  // État métier partagé (managers, équipe, pointage, compteurs) : lu et écrit
+  // dans Firebase Realtime Database. `null` tant qu'il n'a pas encore été
+  // reçu du serveur (premier chargement de la page).
+  const [etat, setEtat] = useState(null);
 
-  // Équipe commerciale : modifiable via l'écran "Équipe"
-  const [commerciaux, setCommerciaux] = useState(ETAT_SAUVEGARDE?.commerciaux ?? COMMERCIAUX_INITIAUX);
-  // Compteur pour générer des identifiants uniques aux nouveaux commerciaux
-  const [prochainId, setProchainId] = useState(ETAT_SAUVEGARDE?.prochainId ?? COMMERCIAUX_INITIAUX.length + 1);
+  // S'abonne à la base au montage : dès qu'un manager (n'importe où) modifie
+  // les données, ce callback est rappelé et met à jour l'écran de tout le
+  // monde — c'est ça qui rend le pointage réellement partagé en temps réel.
+  useEffect(() => {
+    const refDonnees = ref(db, CHEMIN_DONNEES);
+    const desabonner = onValue(refDonnees, (snapshot) => {
+      const donnees = snapshot.val();
+      if (donnees) {
+        setEtat(donnees);
+      } else {
+        // Rien en base : première ouverture de l'application. On amorce
+        // avec les données de démonstration, pour tout le monde.
+        const demo = etatDemo();
+        setEtat(demo);
+        set(refDonnees, demo);
+      }
+    });
+    return () => desabonner();
+  }, []);
 
-  // Pointage : { [date]: { [commercialId]: statut } }. Repart de la sauvegarde locale
-  // si elle existe, sinon des données de démo (construites une seule fois).
-  const [pointage, setPointage] = useState(() => ETAT_SAUVEGARDE?.pointage ?? construireDonneesDemo());
+  // Écrit l'état métier dans la base : chaque manager qui a la page ouverte
+  // le voit apparaître immédiatement, sans recharger la page.
+  function publierEtat(nouvelEtat) {
+    setEtat(nouvelEtat); // mise à jour immédiate de l'écran de l'auteur du changement
+    set(ref(db, CHEMIN_DONNEES), nouvelEtat).catch(() => {
+      // Écriture impossible (réseau coupé...) : l'écran reste à jour localement,
+      // mais le changement n'aura pas été partagé. Rien de plus à faire ici.
+    });
+  }
 
   // Date affichée sur l'écran de pointage du jour (par défaut : aujourd'hui)
   const [dateJour, setDateJour] = useState(() => ancrerJourOuvre(toISODate(new Date())));
@@ -1032,11 +1034,16 @@ export default function App() {
   // Ancre de la vue semaine (par manager, on repart de la date du jour)
   const [ancreSemaine, setAncreSemaine] = useState(() => ancrerJourOuvre(toISODate(new Date())));
 
-  // Sauvegarde automatique dans le localStorage à chaque changement de données :
-  // c'est ce qui fait que les noms saisis et le pointage restent d'une visite à l'autre.
-  useEffect(() => {
-    sauvegarderEtat({ managers, prochainManagerId, commerciaux, prochainId, pointage });
-  }, [managers, prochainManagerId, commerciaux, prochainId, pointage]);
+  // Tant que l'état n'est pas encore arrivé de la base, on affiche un écran neutre.
+  if (etat === null) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50">
+        <p className="text-slate-400">Chargement…</p>
+      </div>
+    );
+  }
+
+  const { managers, commerciaux, pointage, prochainId, prochainManagerId } = etat;
 
   // Statut d'un commercial à une date donnée (par défaut : "présent")
   function getStatut(date, commercialId) {
@@ -1045,47 +1052,49 @@ export default function App() {
 
   // Fait avancer le statut d'un commercial au clic
   function cyclerStatut(date, commercialId) {
-    setPointage((prev) => {
-      const jour = prev[date] || {};
-      const actuel = jour[commercialId] ?? 'present';
-      return { ...prev, [date]: { ...jour, [commercialId]: statutSuivant(actuel) } };
+    const jour = pointage[date] || {};
+    const actuel = jour[commercialId] ?? 'present';
+    publierEtat({
+      ...etat,
+      pointage: { ...pointage, [date]: { ...jour, [commercialId]: statutSuivant(actuel) } },
     });
   }
 
   function ajouterCommercial({ nom, managerId }) {
     const id = `c${prochainId}`;
-    setProchainId((n) => n + 1);
-    setCommerciaux((prev) => [...prev, { id, nom, managerId }]);
+    publierEtat({
+      ...etat,
+      commerciaux: [...commerciaux, { id, nom, managerId }],
+      prochainId: prochainId + 1,
+    });
   }
   function retirerCommercial(id) {
-    setCommerciaux((prev) => prev.filter((c) => c.id !== id));
+    publierEtat({ ...etat, commerciaux: commerciaux.filter((c) => c.id !== id) });
   }
 
   function renommerManager(id, nom) {
-    setManagers((prev) => prev.map((m) => (m.id === id ? { ...m, nom } : m)));
+    publierEtat({ ...etat, managers: managers.map((m) => (m.id === id ? { ...m, nom } : m)) });
   }
   function ajouterManager(nom) {
     const id = `m${prochainManagerId}`;
     const couleur = PALETTE_COULEURS[managers.length % PALETTE_COULEURS.length];
-    setProchainManagerId((n) => n + 1);
-    setManagers((prev) => [...prev, { id, nom, couleur }]);
+    publierEtat({
+      ...etat,
+      managers: [...managers, { id, nom, couleur }],
+      prochainManagerId: prochainManagerId + 1,
+    });
   }
   function supprimerManager(id) {
     // Sécurité : on ne supprime pas un manager dont l'équipe n'est pas vide
     // (le bouton est déjà désactivé dans l'interface, ceci est une double sécurité).
     if (commerciaux.some((c) => c.managerId === id)) return;
-    setManagers((prev) => prev.filter((m) => m.id !== id));
+    publierEtat({ ...etat, managers: managers.filter((m) => m.id !== id) });
   }
 
-  // Efface la sauvegarde locale et recharge la page pour repartir des données de démo.
+  // Republie les données de démonstration : repart de zéro pour TOUT LE MONDE.
   function reinitialiserDonnees() {
-    if (!window.confirm('Effacer toutes les données saisies et revenir à la démo ?')) return;
-    try {
-      window.localStorage.removeItem(CLE_STOCKAGE);
-    } catch {
-      // rien à faire si le localStorage est indisponible
-    }
-    window.location.reload();
+    if (!window.confirm('Réinitialiser les données pour TOUT LE MONDE avec les données de démonstration ?')) return;
+    publierEtat(etatDemo());
   }
 
   function choisirManager(id) {
