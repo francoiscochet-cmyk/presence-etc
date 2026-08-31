@@ -182,7 +182,11 @@ const PALETTE_COULEURS = [
 // Pas de backend : on sauvegarde l'état complet (managers, équipe, pointage)
 // dans le localStorage du navigateur, pour qu'il survive à un rechargement
 // de la page ou à la fermeture de l'onglet, sur le même appareil.
-const CLE_STOCKAGE = 'pointage-commercial-etat-v1';
+// Le suffixe de version change quand la structure des données de démo change
+// (ex. passage aux vraies équipes, retrait du champ secteur) : ça évite qu'une
+// ancienne sauvegarde locale (avec les anciens noms d'exemple) ne masque les
+// nouvelles données par défaut.
+const CLE_STOCKAGE = 'pointage-commercial-etat-v2';
 
 function chargerEtat() {
   try {
