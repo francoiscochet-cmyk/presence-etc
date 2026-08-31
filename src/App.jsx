@@ -31,7 +31,6 @@ import {
   CheckCircle2,
   XCircle,
   Palmtree,
-  Car,
   Laptop,
   ClipboardCheck,
   LayoutGrid,
@@ -48,8 +47,8 @@ import {
 // 1. CONFIGURATION DES STATUTS DE PRÉSENCE
 // -----------------------------------------------------------------------------
 // L'ordre du tableau définit l'ordre du cycle au clic sur le bouton de statut :
-// Présent -> Absent -> Congé -> Déplacement client -> Télétravail -> Présent
-const ORDRE_STATUTS = ['present', 'absent', 'conge', 'deplacement', 'teletravail'];
+// Présent -> Absent -> Congé -> Télétravail -> Présent
+const ORDRE_STATUTS = ['present', 'absent', 'conge', 'teletravail'];
 
 const STATUTS = {
   present: {
@@ -75,14 +74,6 @@ const STATUTS = {
     badge: 'bg-blue-100 text-blue-800 border-blue-300',
     puce: 'bg-blue-500',
     texte: 'text-blue-700',
-  },
-  deplacement: {
-    label: 'Déplacement client',
-    icon: Car,
-    bouton: 'bg-orange-500 hover:bg-orange-600 focus-visible:ring-orange-400',
-    badge: 'bg-orange-100 text-orange-800 border-orange-300',
-    puce: 'bg-orange-500',
-    texte: 'text-orange-700',
   },
   teletravail: {
     label: 'Télétravail',
@@ -245,15 +236,15 @@ const MOTIF_DEMO = {
   c1: [null, null, null, null],
   c2: ['absent', null, null, null],
   c3: [null, 'conge', 'conge', null],
-  c4: [null, null, 'deplacement', null],
+  c4: [null, null, 'teletravail', null],
   c5: [null, null, null, 'teletravail'],
   c6: [null, 'absent', null, null],
-  c7: ['deplacement', null, null, null],
+  c7: ['conge', null, null, null],
   c8: [null, null, null, 'conge'],
   c9: [null, null, null, 'absent'],
   c10: [null, 'teletravail', null, null],
   c11: [null, null, 'absent', null],
-  c12: [null, null, null, 'deplacement'],
+  c12: [null, null, null, 'absent'],
 };
 
 // Construit l'état initial du pointage : les 4 jours ouvrés avant aujourd'hui
