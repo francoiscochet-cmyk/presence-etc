@@ -16,8 +16,9 @@ dans un navigateur.
   pré-coché « Présent » — journée normale = 2 clics, un absent = 3 clics.
 - **Écran 3** : confirmation avec récapitulatif en une ligne.
 - Fonctions secondaires (jamais dans le chemin principal) : sélecteur de
-  date, vue semaine en tableau, vue Direction (taux de présence par manager
-  et par secteur, filtres, export CSV), gestion de l'équipe.
+  date, vue semaine en tableau, vue Direction (taux de présence par manager,
+  filtres, export CSV), gestion de l'équipe (et des managers, depuis
+  l'écran d'accueil).
 
 ## Démarrer le projet
 
@@ -43,6 +44,7 @@ sauvegarde et de repartir des données d'exemple.
 - React (hooks, état géré via `useState`, persistance via `localStorage` —
   pas de backend).
 - Tailwind CSS pour le style, `lucide-react` pour les icônes.
-- Données de démonstration (utilisées tant qu'aucune sauvegarde locale
-  n'existe) : 3 managers, 12 commerciaux répartis sur 4 secteurs, avec des
-  statuts variés sur les jours précédents.
+- Données pré-remplies (utilisées tant qu'aucune sauvegarde locale
+  n'existe) : les 6 équipes réelles (Lenny, François, Julian, Alexis,
+  Bertrand, Ulysse) et leurs commerciaux, avec des statuts variés sur les
+  jours précédents.

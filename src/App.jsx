@@ -207,26 +207,26 @@ const ETAT_SAUVEGARDE = typeof window !== 'undefined' ? chargerEtat() : null;
 // 3. DONNÉES DE DÉMONSTRATION
 // -----------------------------------------------------------------------------
 const MANAGERS_INITIAUX = [
-  { id: 'm1', nom: 'Sophie Martin', couleur: 'bg-blue-600' },
-  { id: 'm2', nom: 'Karim Benali', couleur: 'bg-emerald-600' },
-  { id: 'm3', nom: 'Julie Lefèvre', couleur: 'bg-amber-600' },
+  { id: 'm1', nom: 'Mildrede Lenny', couleur: 'bg-blue-600' },
+  { id: 'm2', nom: 'François Cochet', couleur: 'bg-emerald-600' },
+  { id: 'm3', nom: 'Julian Lichtensztejn', couleur: 'bg-amber-600' },
+  { id: 'm4', nom: 'Alexis Saksik — FTM.CO', couleur: 'bg-purple-600' },
+  { id: 'm5', nom: 'Bertrand Glemot', couleur: 'bg-rose-600' },
+  { id: 'm6', nom: 'Ulysse Leconte', couleur: 'bg-cyan-600' },
 ];
 
-const SECTEURS = ['Nord', 'Sud', 'Est', 'Ouest'];
-
 const COMMERCIAUX_INITIAUX = [
-  { id: 'c1', nom: 'Alice Dupont', managerId: 'm1', secteur: 'Nord' },
-  { id: 'c2', nom: 'Bruno Girard', managerId: 'm1', secteur: 'Sud' },
-  { id: 'c3', nom: 'Chloé Faure', managerId: 'm1', secteur: 'Est' },
-  { id: 'c4', nom: 'David Morel', managerId: 'm1', secteur: 'Ouest' },
-  { id: 'c5', nom: 'Emma Rousseau', managerId: 'm2', secteur: 'Nord' },
-  { id: 'c6', nom: 'Fabien Noël', managerId: 'm2', secteur: 'Sud' },
-  { id: 'c7', nom: 'Gabrielle Petit', managerId: 'm2', secteur: 'Est' },
-  { id: 'c8', nom: 'Hugo Lambert', managerId: 'm2', secteur: 'Ouest' },
-  { id: 'c9', nom: 'Inès Caron', managerId: 'm3', secteur: 'Nord' },
-  { id: 'c10', nom: 'Jules Renard', managerId: 'm3', secteur: 'Sud' },
-  { id: 'c11', nom: 'Léa Fontaine', managerId: 'm3', secteur: 'Est' },
-  { id: 'c12', nom: 'Marc Dubois', managerId: 'm3', secteur: 'Ouest' },
+  { id: 'c1', nom: 'Rose', managerId: 'm1' },
+  { id: 'c2', nom: 'Richard Tordjman', managerId: 'm1' },
+  { id: 'c3', nom: 'Nathan Ittah', managerId: 'm1' },
+  { id: 'c4', nom: 'Danyl Ouallouche', managerId: 'm2' },
+  { id: 'c5', nom: 'Lothaire Bassinat', managerId: 'm2' },
+  { id: 'c6', nom: 'Mehdi Bozonnet', managerId: 'm2' },
+  { id: 'c7', nom: 'Lisa', managerId: 'm3' },
+  { id: 'c8', nom: 'Paul Taluau', managerId: 'm3' },
+  { id: 'c9', nom: 'Simon Agus', managerId: 'm4' },
+  { id: 'c10', nom: 'Raphaela Agus', managerId: 'm5' },
+  { id: 'c11', nom: 'Sacha Asator Laranjeira', managerId: 'm6' },
 ];
 
 // Motif de statuts pour les 4 jours ouvrés précédant aujourd'hui
@@ -244,7 +244,6 @@ const MOTIF_DEMO = {
   c9: [null, null, null, 'absent'],
   c10: [null, 'teletravail', null, null],
   c11: [null, null, 'absent', null],
-  c12: [null, null, null, 'absent'],
 };
 
 // Construit l'état initial du pointage : les 4 jours ouvrés avant aujourd'hui
@@ -610,10 +609,7 @@ function EcranPointageJour({ equipe, date, onChangerDate, getStatut, onCyclerSta
               key={c.id}
               className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
             >
-              <div>
-                <p className="font-semibold text-slate-800">{c.nom}</p>
-                <p className="text-sm text-slate-500">Secteur {c.secteur}</p>
-              </div>
+              <p className="font-semibold text-slate-800">{c.nom}</p>
               <BoutonStatut statut={statut} onClick={() => onCyclerStatut(date, c.id)} />
             </div>
           );
@@ -728,10 +724,7 @@ function EcranSemaine({ equipe, ancre, onChangerAncre, getStatut, onCyclerStatut
           <tbody>
             {equipe.map((c) => (
               <tr key={c.id} className="border-b border-slate-100 last:border-0">
-                <td className="p-3 font-medium text-slate-800">
-                  {c.nom}
-                  <span className="ml-2 text-xs font-normal text-slate-400">{c.secteur}</span>
-                </td>
+                <td className="p-3 font-medium text-slate-800">{c.nom}</td>
                 {jours.map((j) => (
                   <td key={j} className="p-2 text-center">
                     <button type="button" onClick={() => onCyclerStatut(j, c.id)} className="mx-auto block">
@@ -760,14 +753,12 @@ function EcranSemaine({ equipe, ancre, onChangerAncre, getStatut, onCyclerStatut
 // -----------------------------------------------------------------------------
 function EcranEquipe({ managerId, equipe, onAjouter, onRetirer, onReinitialiser }) {
   const [nom, setNom] = useState('');
-  const [secteur, setSecteur] = useState(SECTEURS[0]);
 
   function soumettre(e) {
     e.preventDefault();
     if (!nom.trim()) return;
-    onAjouter({ nom: nom.trim(), secteur, managerId });
+    onAjouter({ nom: nom.trim(), managerId });
     setNom('');
-    setSecteur(SECTEURS[0]);
   }
 
   return (
@@ -788,20 +779,6 @@ function EcranEquipe({ managerId, equipe, onAjouter, onRetirer, onReinitialiser 
             className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-blue-500 focus:outline-none"
           />
         </label>
-        <label className="text-sm">
-          <span className="mb-1 block font-medium text-slate-600">Secteur</span>
-          <select
-            value={secteur}
-            onChange={(e) => setSecteur(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-blue-500 focus:outline-none sm:w-40"
-          >
-            {SECTEURS.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-        </label>
         <button
           type="submit"
           className="flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white transition hover:bg-blue-700"
@@ -814,10 +791,7 @@ function EcranEquipe({ managerId, equipe, onAjouter, onRetirer, onReinitialiser 
       <div className="divide-y divide-slate-200 overflow-hidden rounded-2xl border border-slate-200 bg-white">
         {equipe.map((c) => (
           <div key={c.id} className="flex items-center justify-between p-4">
-            <div>
-              <p className="font-semibold text-slate-800">{c.nom}</p>
-              <p className="text-sm text-slate-500">Secteur {c.secteur}</p>
-            </div>
+            <p className="font-semibold text-slate-800">{c.nom}</p>
             <button
               type="button"
               onClick={() => onRetirer(c.id)}
@@ -884,15 +858,11 @@ function EcranDirection({ managers, commerciaux, date, onChangerDate, getStatut,
     ...m,
     liste: lignes.filter((l) => l.managerId === m.id),
   }));
-  const parSecteur = SECTEURS.map((s) => ({
-    secteur: s,
-    liste: lignes.filter((l) => l.secteur === s),
-  }));
 
   function exporterCSV() {
-    const entetes = ['Commercial', 'Manager', 'Secteur', 'Statut', 'Date'];
+    const entetes = ['Commercial', 'Manager', 'Statut', 'Date'];
     const lignesCSV = lignesFiltrees.map((l) =>
-      [l.nom, l.managerNom, l.secteur, STATUTS[l.statut].label, date].join(';')
+      [l.nom, l.managerNom, STATUTS[l.statut].label, date].join(';')
     );
     const contenu = [entetes.join(';'), ...lignesCSV].join('\n');
     const blob = new Blob(['﻿' + contenu], { type: 'text/csv;charset=utf-8;' });
@@ -952,21 +922,6 @@ function EcranDirection({ managers, commerciaux, date, onChangerDate, getStatut,
           ))}
         </div>
 
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-          Taux de présence par secteur
-        </h2>
-        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {parSecteur.map((s) => (
-            <div key={s.secteur} className="rounded-2xl border border-slate-200 bg-white p-4">
-              <p className="font-semibold text-slate-800">{s.secteur}</p>
-              <div className="my-2 h-2 w-full overflow-hidden rounded-full bg-slate-100">
-                <div className="h-full bg-green-500" style={{ width: `${tauxPresence(s.liste)}%` }} />
-              </div>
-              <p className="text-sm text-slate-500">{tauxPresence(s.liste)}%</p>
-            </div>
-          ))}
-        </div>
-
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
             <Filter className="h-4 w-4 text-slate-400" />
@@ -1011,7 +966,6 @@ function EcranDirection({ managers, commerciaux, date, onChangerDate, getStatut,
               <tr className="border-b border-slate-200 bg-slate-50 text-left">
                 <th className="p-3 font-semibold text-slate-600">Commercial</th>
                 <th className="p-3 font-semibold text-slate-600">Manager</th>
-                <th className="p-3 font-semibold text-slate-600">Secteur</th>
                 <th className="p-3 font-semibold text-slate-600">Statut</th>
               </tr>
             </thead>
@@ -1020,7 +974,6 @@ function EcranDirection({ managers, commerciaux, date, onChangerDate, getStatut,
                 <tr key={l.id} className="border-b border-slate-100 last:border-0">
                   <td className="p-3 font-medium text-slate-800">{l.nom}</td>
                   <td className="p-3 text-slate-600">{l.managerNom}</td>
-                  <td className="p-3 text-slate-600">{l.secteur}</td>
                   <td className="p-3">
                     <BadgeStatut statut={l.statut} />
                   </td>
@@ -1028,7 +981,7 @@ function EcranDirection({ managers, commerciaux, date, onChangerDate, getStatut,
               ))}
               {lignesFiltrees.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="p-6 text-center text-slate-500">
+                  <td colSpan={3} className="p-6 text-center text-slate-500">
                     Aucun résultat pour ces filtres.
                   </td>
                 </tr>
@@ -1095,10 +1048,10 @@ export default function App() {
     });
   }
 
-  function ajouterCommercial({ nom, secteur, managerId }) {
+  function ajouterCommercial({ nom, managerId }) {
     const id = `c${prochainId}`;
     setProchainId((n) => n + 1);
-    setCommerciaux((prev) => [...prev, { id, nom, secteur, managerId }]);
+    setCommerciaux((prev) => [...prev, { id, nom, managerId }]);
   }
   function retirerCommercial(id) {
     setCommerciaux((prev) => prev.filter((c) => c.id !== id));
