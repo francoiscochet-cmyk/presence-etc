@@ -28,10 +28,21 @@ npm run dev
 
 Puis ouvrez l'URL affichée (par défaut http://localhost:5173).
 
+## Mémorisation des données
+
+Il n'y a pas de backend, mais l'application sauvegarde automatiquement les
+managers, la composition des équipes et le pointage dans le `localStorage`
+du navigateur à chaque modification. Les noms saisis restent donc d'une
+visite à l'autre sur le même appareil/navigateur (pas de synchronisation
+entre appareils). Un bouton « Réinitialiser avec les données de
+démonstration », discret en bas de l'onglet Équipe, permet d'effacer la
+sauvegarde et de repartir des données d'exemple.
+
 ## Technique
 
-- React (hooks, état en mémoire via `useState`, pas de backend ni de
-  `localStorage`).
+- React (hooks, état géré via `useState`, persistance via `localStorage` —
+  pas de backend).
 - Tailwind CSS pour le style, `lucide-react` pour les icônes.
-- Données de démonstration : 3 managers, 12 commerciaux répartis sur
-  4 secteurs, avec des statuts variés sur les jours précédents.
+- Données de démonstration (utilisées tant qu'aucune sauvegarde locale
+  n'existe) : 3 managers, 12 commerciaux répartis sur 4 secteurs, avec des
+  statuts variés sur les jours précédents.

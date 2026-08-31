@@ -2,8 +2,10 @@
 // APPLICATION DE POINTAGE QUOTIDIEN — ÉQUIPE COMMERCIALE
 // -----------------------------------------------------------------------------
 // Application React en un seul fichier, pensée pour être remplie en 2 ou 3
-// clics par les managers. Toutes les données sont conservées en mémoire
-// (useState) : il n'y a ni backend, ni localStorage, ni persistance.
+// clics par les managers. Pas de backend : l'état vit dans React (useState)
+// et est sauvegardé dans le localStorage du navigateur à chaque changement,
+// afin que les noms des managers, la composition des équipes et le pointage
+// restent d'une visite à l'autre sur le même appareil.
 //
 // Parcours principal :
 //   Écran 1 (Accueil)     -> le manager clique sur sa carte
@@ -15,7 +17,7 @@
 // date, vue semaine, vue Direction (lecture seule), gestion d'équipe.
 // =============================================================================
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Building2,
   Users,
@@ -35,6 +37,11 @@ import {
   LayoutGrid,
   Settings2,
   Filter,
+  Pencil,
+  Check,
+  X,
+  Plus,
+  RotateCcw,
 } from 'lucide-react';
 
 // -----------------------------------------------------------------------------
@@ -156,13 +163,62 @@ function formatDateCourt(dateStr) {
   return `${NOMS_JOURS_COURT[d.getDay()]} ${d.getDate()}/${d.getMonth() + 1}`;
 }
 
+// Calcule des initiales (1 ou 2 lettres) à partir d'un nom, recalculées à
+// chaque affichage : renommer un manager met donc directement à jour son
+// avatar, sans champ séparé à synchroniser.
+function initialesDe(nom) {
+  const mots = nom.trim().split(/\s+/).filter(Boolean);
+  if (mots.length === 0) return '?';
+  if (mots.length === 1) return mots[0].slice(0, 2).toUpperCase();
+  return (mots[0][0] + mots[1][0]).toUpperCase();
+}
+
+// Palette de couleurs attribuées automatiquement aux nouveaux managers.
+const PALETTE_COULEURS = [
+  'bg-blue-600',
+  'bg-emerald-600',
+  'bg-amber-600',
+  'bg-purple-600',
+  'bg-rose-600',
+  'bg-cyan-600',
+  'bg-indigo-600',
+  'bg-teal-600',
+];
+
+// -----------------------------------------------------------------------------
+// 2 bis. PERSISTANCE (localStorage)
+// -----------------------------------------------------------------------------
+// Pas de backend : on sauvegarde l'état complet (managers, équipe, pointage)
+// dans le localStorage du navigateur, pour qu'il survive à un rechargement
+// de la page ou à la fermeture de l'onglet, sur le même appareil.
+const CLE_STOCKAGE = 'pointage-commercial-etat-v1';
+
+function chargerEtat() {
+  try {
+    const brut = window.localStorage.getItem(CLE_STOCKAGE);
+    return brut ? JSON.parse(brut) : null;
+  } catch {
+    // localStorage indisponible (navigation privée, quota...) : on repart des données de démo.
+    return null;
+  }
+}
+function sauvegarderEtat(etat) {
+  try {
+    window.localStorage.setItem(CLE_STOCKAGE, JSON.stringify(etat));
+  } catch {
+    // Sauvegarde impossible : l'application continue de fonctionner en mémoire uniquement.
+  }
+}
+// Lu une seule fois, au chargement du module (donc au chargement de la page).
+const ETAT_SAUVEGARDE = typeof window !== 'undefined' ? chargerEtat() : null;
+
 // -----------------------------------------------------------------------------
 // 3. DONNÉES DE DÉMONSTRATION
 // -----------------------------------------------------------------------------
-const MANAGERS = [
-  { id: 'm1', nom: 'Sophie Martin', initiales: 'SM', couleur: 'bg-blue-600' },
-  { id: 'm2', nom: 'Karim Benali', initiales: 'KB', couleur: 'bg-emerald-600' },
-  { id: 'm3', nom: 'Julie Lefèvre', initiales: 'JL', couleur: 'bg-amber-600' },
+const MANAGERS_INITIAUX = [
+  { id: 'm1', nom: 'Sophie Martin', couleur: 'bg-blue-600' },
+  { id: 'm2', nom: 'Karim Benali', couleur: 'bg-emerald-600' },
+  { id: 'm3', nom: 'Julie Lefèvre', couleur: 'bg-amber-600' },
 ];
 
 const SECTEURS = ['Nord', 'Sud', 'Est', 'Ouest'];
@@ -273,57 +329,172 @@ function BoutonStatut({ statut, onClick }) {
 // -----------------------------------------------------------------------------
 // 5. ÉCRAN 1 — SÉLECTION DU MANAGER ("Qui êtes-vous ?")
 // -----------------------------------------------------------------------------
-function EcranAccueil({ managers, commerciaux, onChoisirManager, onChoisirDirection }) {
+// Une carte manager : cliquable pour entrer dans son espace, sauf en mode
+// édition où elle devient un formulaire de renommage (le nom saisi reste
+// mémorisé, cf. persistance dans le composant racine).
+function CarteManager({ manager, taille, modeEdition, onChoisir, onRenommer, onSupprimer }) {
+  const [nom, setNom] = useState(manager.nom);
+
+  if (modeEdition) {
+    const suppressionBloquee = taille > 0;
+    return (
+      <div className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-6">
+        <span
+          className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-full text-xl font-bold text-white ${manager.couleur}`}
+        >
+          {initialesDe(nom || manager.nom)}
+        </span>
+        <div className="flex-1">
+          <input
+            type="text"
+            value={nom}
+            onChange={(e) => setNom(e.target.value)}
+            onBlur={() => nom.trim() && onRenommer(nom.trim())}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') e.currentTarget.blur();
+            }}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 font-semibold focus:border-blue-500 focus:outline-none"
+          />
+          <p className="mt-1.5 text-sm text-slate-500">
+            {taille} commerciaux dans l'équipe
+            {suppressionBloquee && ' — retirez d\'abord son équipe pour le supprimer'}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => onSupprimer()}
+          disabled={suppressionBloquee}
+          title={suppressionBloquee ? "Impossible : l'équipe n'est pas vide" : 'Supprimer ce manager'}
+          className="rounded-lg p-2.5 text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent"
+        >
+          <Trash2 className="h-5 w-5" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onChoisir}
+      className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-6 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus-visible:ring-4 focus-visible:ring-blue-200 active:scale-[0.99]"
+    >
+      <span
+        className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-full text-xl font-bold text-white ${manager.couleur}`}
+      >
+        {initialesDe(manager.nom)}
+      </span>
+      <span>
+        <span className="block text-lg font-semibold text-slate-800">{manager.nom}</span>
+        <span className="mt-1 flex items-center gap-1.5 text-sm text-slate-500">
+          <Users className="h-4 w-4" />
+          {taille} commerciaux dans l'équipe
+        </span>
+      </span>
+    </button>
+  );
+}
+
+function EcranAccueil({
+  managers,
+  commerciaux,
+  onChoisirManager,
+  onChoisirDirection,
+  onRenommerManager,
+  onAjouterManager,
+  onSupprimerManager,
+}) {
+  const [modeEdition, setModeEdition] = useState(false);
+  const [nouveauNom, setNouveauNom] = useState('');
+
+  function soumettreNouveauManager(e) {
+    e.preventDefault();
+    if (!nouveauNom.trim()) return;
+    onAjouterManager(nouveauNom.trim());
+    setNouveauNom('');
+  }
+
   return (
     <div className="mx-auto max-w-4xl px-4 py-10">
       <div className="mb-10 text-center">
         <h1 className="text-2xl font-bold text-slate-800 sm:text-3xl">Qui êtes-vous ?</h1>
         <p className="mt-2 text-slate-500">Touchez votre carte pour accéder au pointage du jour.</p>
+        <button
+          type="button"
+          onClick={() => setModeEdition((v) => !v)}
+          className="mt-4 inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-slate-500 hover:bg-slate-100"
+        >
+          {modeEdition ? (
+            <>
+              <Check className="h-4 w-4" />
+              Terminer la modification
+            </>
+          ) : (
+            <>
+              <Pencil className="h-4 w-4" />
+              Modifier les noms des managers
+            </>
+          )}
+        </button>
       </div>
 
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
         {managers.map((m) => {
           const taille = commerciaux.filter((c) => c.managerId === m.id).length;
           return (
-            <button
+            <CarteManager
               key={m.id}
-              type="button"
-              onClick={() => onChoisirManager(m.id)}
-              className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-6 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus-visible:ring-4 focus-visible:ring-blue-200 active:scale-[0.99]"
-            >
-              <span
-                className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-full text-xl font-bold text-white ${m.couleur}`}
-              >
-                {m.initiales}
-              </span>
-              <span>
-                <span className="block text-lg font-semibold text-slate-800">{m.nom}</span>
-                <span className="mt-1 flex items-center gap-1.5 text-sm text-slate-500">
-                  <Users className="h-4 w-4" />
-                  {taille} commerciaux dans l'équipe
-                </span>
-              </span>
-            </button>
+              manager={m}
+              taille={taille}
+              modeEdition={modeEdition}
+              onChoisir={() => onChoisirManager(m.id)}
+              onRenommer={(nom) => onRenommerManager(m.id, nom)}
+              onSupprimer={() => onSupprimerManager(m.id)}
+            />
           );
         })}
 
         {/* Carte "Direction", visuellement distincte des cartes manager */}
-        <button
-          type="button"
-          onClick={onChoisirDirection}
-          className="flex items-center gap-4 rounded-2xl border border-slate-700 bg-slate-800 p-6 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus-visible:ring-4 focus-visible:ring-slate-400 active:scale-[0.99] sm:col-span-2"
-        >
-          <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-slate-600 text-white">
-            <Building2 className="h-7 w-7" />
-          </span>
-          <span>
-            <span className="block text-lg font-semibold text-white">Direction</span>
-            <span className="mt-1 block text-sm text-slate-300">
-              Vue globale consolidée de toutes les équipes (lecture seule)
+        {!modeEdition && (
+          <button
+            type="button"
+            onClick={onChoisirDirection}
+            className="flex items-center gap-4 rounded-2xl border border-slate-700 bg-slate-800 p-6 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus-visible:ring-4 focus-visible:ring-slate-400 active:scale-[0.99] sm:col-span-2"
+          >
+            <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-slate-600 text-white">
+              <Building2 className="h-7 w-7" />
             </span>
-          </span>
-        </button>
+            <span>
+              <span className="block text-lg font-semibold text-white">Direction</span>
+              <span className="mt-1 block text-sm text-slate-300">
+                Vue globale consolidée de toutes les équipes (lecture seule)
+              </span>
+            </span>
+          </button>
+        )}
       </div>
+
+      {modeEdition && (
+        <form
+          onSubmit={soumettreNouveauManager}
+          className="mt-5 flex flex-col gap-3 rounded-2xl border border-dashed border-slate-300 bg-white p-4 sm:flex-row"
+        >
+          <input
+            type="text"
+            value={nouveauNom}
+            onChange={(e) => setNouveauNom(e.target.value)}
+            placeholder="Nom du nouveau manager"
+            className="flex-1 rounded-lg border border-slate-300 px-3 py-2 focus:border-blue-500 focus:outline-none"
+          />
+          <button
+            type="submit"
+            className="flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white transition hover:bg-blue-700"
+          >
+            <Plus className="h-4 w-4" />
+            Ajouter un manager
+          </button>
+        </form>
+      )}
     </div>
   );
 }
@@ -344,7 +515,7 @@ function EnTeteManager({ manager, onglet, onChangerOnglet, onChangerUtilisateur 
           <span
             className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold text-white ${manager.couleur}`}
           >
-            {manager.initiales}
+            {initialesDe(manager.nom)}
           </span>
           <span className="font-semibold text-slate-800">{manager.nom}</span>
         </div>
@@ -596,7 +767,7 @@ function EcranSemaine({ equipe, ancre, onChangerAncre, getStatut, onCyclerStatut
 // -----------------------------------------------------------------------------
 // 10. VUE SECONDAIRE — GESTION DE L'ÉQUIPE
 // -----------------------------------------------------------------------------
-function EcranEquipe({ managerId, equipe, onAjouter, onRetirer }) {
+function EcranEquipe({ managerId, equipe, onAjouter, onRetirer, onReinitialiser }) {
   const [nom, setNom] = useState('');
   const [secteur, setSecteur] = useState(SECTEURS[0]);
 
@@ -669,6 +840,21 @@ function EcranEquipe({ managerId, equipe, onAjouter, onRetirer }) {
         {equipe.length === 0 && (
           <p className="p-6 text-center text-sm text-slate-500">Aucun commercial pour l'instant.</p>
         )}
+      </div>
+
+      <div className="mt-8 border-t border-slate-200 pt-5 text-center">
+        <p className="text-xs text-slate-400">
+          Les noms des managers et des commerciaux, ainsi que le pointage, sont mémorisés
+          automatiquement sur cet appareil.
+        </p>
+        <button
+          type="button"
+          onClick={onReinitialiser}
+          className="mt-2 inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+        >
+          <RotateCcw className="h-3.5 w-3.5" />
+          Réinitialiser avec les données de démonstration
+        </button>
       </div>
     </div>
   );
@@ -763,7 +949,7 @@ function EcranDirection({ managers, commerciaux, date, onChangerDate, getStatut,
             <div key={m.id} className="rounded-2xl border border-slate-200 bg-white p-4">
               <div className="mb-2 flex items-center gap-2">
                 <span className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold text-white ${m.couleur}`}>
-                  {m.initiales}
+                  {initialesDe(m.nom)}
                 </span>
                 <span className="font-semibold text-slate-800">{m.nom}</span>
               </div>
@@ -873,13 +1059,22 @@ export default function App() {
   // Onglet actif dans l'espace manager
   const [onglet, setOnglet] = useState('jour');
 
-  // Équipe commerciale : modifiable via l'écran "Équipe"
-  const [commerciaux, setCommerciaux] = useState(COMMERCIAUX_INITIAUX);
-  // Compteur pour générer des identifiants uniques aux nouveaux commerciaux
-  const [prochainId, setProchainId] = useState(COMMERCIAUX_INITIAUX.length + 1);
+  // Managers : modifiables (renommer / ajouter / supprimer) depuis l'écran d'accueil.
+  // Repartent de la sauvegarde locale si elle existe, sinon des données de démo.
+  const [managers, setManagers] = useState(ETAT_SAUVEGARDE?.managers ?? MANAGERS_INITIAUX);
+  // Compteur pour générer des identifiants uniques aux nouveaux managers
+  const [prochainManagerId, setProchainManagerId] = useState(
+    ETAT_SAUVEGARDE?.prochainManagerId ?? MANAGERS_INITIAUX.length + 1
+  );
 
-  // Pointage : { [date]: { [commercialId]: statut } }. Construit une seule fois.
-  const [pointage, setPointage] = useState(() => construireDonneesDemo());
+  // Équipe commerciale : modifiable via l'écran "Équipe"
+  const [commerciaux, setCommerciaux] = useState(ETAT_SAUVEGARDE?.commerciaux ?? COMMERCIAUX_INITIAUX);
+  // Compteur pour générer des identifiants uniques aux nouveaux commerciaux
+  const [prochainId, setProchainId] = useState(ETAT_SAUVEGARDE?.prochainId ?? COMMERCIAUX_INITIAUX.length + 1);
+
+  // Pointage : { [date]: { [commercialId]: statut } }. Repart de la sauvegarde locale
+  // si elle existe, sinon des données de démo (construites une seule fois).
+  const [pointage, setPointage] = useState(() => ETAT_SAUVEGARDE?.pointage ?? construireDonneesDemo());
 
   // Date affichée sur l'écran de pointage du jour (par défaut : aujourd'hui)
   const [dateJour, setDateJour] = useState(() => ancrerJourOuvre(toISODate(new Date())));
@@ -888,6 +1083,12 @@ export default function App() {
   const [dateDirection, setDateDirection] = useState(() => jourOuvrePrecedent(ancrerJourOuvre(toISODate(new Date()))));
   // Ancre de la vue semaine (par manager, on repart de la date du jour)
   const [ancreSemaine, setAncreSemaine] = useState(() => ancrerJourOuvre(toISODate(new Date())));
+
+  // Sauvegarde automatique dans le localStorage à chaque changement de données :
+  // c'est ce qui fait que les noms saisis et le pointage restent d'une visite à l'autre.
+  useEffect(() => {
+    sauvegarderEtat({ managers, prochainManagerId, commerciaux, prochainId, pointage });
+  }, [managers, prochainManagerId, commerciaux, prochainId, pointage]);
 
   // Statut d'un commercial à une date donnée (par défaut : "présent")
   function getStatut(date, commercialId) {
@@ -912,6 +1113,33 @@ export default function App() {
     setCommerciaux((prev) => prev.filter((c) => c.id !== id));
   }
 
+  function renommerManager(id, nom) {
+    setManagers((prev) => prev.map((m) => (m.id === id ? { ...m, nom } : m)));
+  }
+  function ajouterManager(nom) {
+    const id = `m${prochainManagerId}`;
+    const couleur = PALETTE_COULEURS[managers.length % PALETTE_COULEURS.length];
+    setProchainManagerId((n) => n + 1);
+    setManagers((prev) => [...prev, { id, nom, couleur }]);
+  }
+  function supprimerManager(id) {
+    // Sécurité : on ne supprime pas un manager dont l'équipe n'est pas vide
+    // (le bouton est déjà désactivé dans l'interface, ceci est une double sécurité).
+    if (commerciaux.some((c) => c.managerId === id)) return;
+    setManagers((prev) => prev.filter((m) => m.id !== id));
+  }
+
+  // Efface la sauvegarde locale et recharge la page pour repartir des données de démo.
+  function reinitialiserDonnees() {
+    if (!window.confirm('Effacer toutes les données saisies et revenir à la démo ?')) return;
+    try {
+      window.localStorage.removeItem(CLE_STOCKAGE);
+    } catch {
+      // rien à faire si le localStorage est indisponible
+    }
+    window.location.reload();
+  }
+
   function choisirManager(id) {
     setEspaceId(id);
     setOnglet('jour');
@@ -930,10 +1158,13 @@ export default function App() {
     return (
       <div className="min-h-screen bg-slate-50">
         <EcranAccueil
-          managers={MANAGERS}
+          managers={managers}
           commerciaux={commerciaux}
           onChoisirManager={choisirManager}
           onChoisirDirection={() => setEspaceId('direction')}
+          onRenommerManager={renommerManager}
+          onAjouterManager={ajouterManager}
+          onSupprimerManager={supprimerManager}
         />
       </div>
     );
@@ -943,7 +1174,7 @@ export default function App() {
   if (espaceId === 'direction') {
     return (
       <EcranDirection
-        managers={MANAGERS}
+        managers={managers}
         commerciaux={commerciaux}
         date={dateDirection}
         onChangerDate={setDateDirection}
@@ -954,7 +1185,7 @@ export default function App() {
   }
 
   // Espace d'un manager
-  const manager = MANAGERS.find((m) => m.id === espaceId);
+  const manager = managers.find((m) => m.id === espaceId);
   const equipe = commerciaux.filter((c) => c.managerId === espaceId);
 
   const recapDuJour = ORDRE_STATUTS.reduce((acc, cle) => {
@@ -1009,6 +1240,7 @@ export default function App() {
           equipe={equipe}
           onAjouter={ajouterCommercial}
           onRetirer={retirerCommercial}
+          onReinitialiser={reinitialiserDonnees}
         />
       )}
     </div>
